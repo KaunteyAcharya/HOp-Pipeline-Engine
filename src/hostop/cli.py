@@ -115,9 +115,36 @@ def analyze(
 
 
 @app.command()
-def score(demo: bool = DemoOpt) -> None:
-    """Score operators into tiers A/B/C."""
-    _todo("score", demo)
+def score(
+    demo: bool = DemoOpt,
+    explain_id: int = typer.Option(None, "--explain", help="Show the score breakdown for one operator id."),
+) -> None:
+    """Score operators into tiers A/B/C (or explain one score)."""
+    from rich.table import Table
+
+    from hostop.scoring.icp import explain, score_all
+
+    _banner(demo)
+    cfg = load_config()
+    url = db_url(demo)
+    init_db(url)
+    with session_scope(url) as s:
+        if explain_id is None:
+            counts = score_all(s, cfg)
+            console.print(f"Tier A: {counts['A']}  Tier B: {counts['B']}  Tier C: {counts['C']}")
+            return
+        info = explain(s, explain_id)
+    if info is None:
+        console.print(f"No operator {explain_id}")
+        raise typer.Exit(1)
+    tag = " (SYNTHETIC)" if info["synthetic"] else ""
+    console.print(f"[bold]{info['operator']}[/]{tag} {info['domain'] or ''}: "
+                  f"{info['total']} pts, Tier {info['tier']}")
+    table = Table("factor", "points", "reason", "evidence")
+    for f in info["factors"]:
+        evs = "\n".join(f"#{e['id']} {e['claim']} {e['url'] or ''}" for e in f["evidence"])
+        table.add_row(f["factor"], str(f["points"]), f["reason"], evs)
+    console.print(table)
 
 
 @app.command()

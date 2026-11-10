@@ -110,3 +110,18 @@ fetch:
 
 enrichment:
   credit_budget_per_run: 50
+
+scoring:
+  # Points per factor; total is capped at 100. Tier thresholds below.
+  weights:
+    ideal_band: 30        # listing count inside ideal_min..ideal_max
+    icp_band: 20          # inside min..max but outside ideal band
+    multi_market: 15      # present in >= multi_market_min_cities cities
+    direct_booking: 15    # own booking site detected
+    pms_detected: 10      # a known PMS seen on site (integration/replacement conversation; HostOp integrations NOT verified)
+    hiring: 15            # hiring guest-experience / ops roles
+    listing_growth: 10    # listing count grew between Inside Airbnb snapshots
+    has_website: 5        # needed for research and contact discovery
+  tiers:
+    A: 60
+    B: 35

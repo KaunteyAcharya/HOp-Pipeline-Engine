@@ -14,11 +14,13 @@ def compute_growth(session: Session) -> int:
     session.execute(delete(Signal).where(Signal.kind == "listing_growth"))
     session.execute(delete(Evidence).where(Evidence.kind == "listing_growth"))
     series: dict[tuple[int, str], list[tuple[str, int]]] = defaultdict(list)
+    synthetic: dict[int, bool] = {}
     rows = session.scalars(select(OperatorSource).where(OperatorSource.source == "inside_airbnb"))
     for src in rows:
         if src.operator_id is None or not src.snapshot:
             continue
         city = src.source_key.split("|")[0]
+        synthetic[src.operator_id] = src.is_synthetic
         series[(src.operator_id, city)].append((src.snapshot, int(src.raw["calculated_host_listings_count"])))
     n = 0
     for (op_id, city), points in series.items():
@@ -28,8 +30,9 @@ def compute_growth(session: Session) -> int:
         (s0, c0), (s1, c1) = points[0], points[-1]
         if c1 <= c0:
             continue
+        tag = "SYNTHETIC " if synthetic.get(op_id) else ""
         ev = Evidence(operator_id=op_id, kind="listing_growth",
-                      claim=f"Inside Airbnb {city}: {c0} listings ({s0}) -> {c1} listings ({s1})")
+                      claim=f"{tag}Inside Airbnb {city}: {c0} listings ({s0}) -> {c1} listings ({s1})")
         session.add(ev)
         session.flush()
         session.add(Signal(operator_id=op_id, kind="listing_growth", value=float(c1 - c0),

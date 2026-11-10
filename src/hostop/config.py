@@ -72,6 +72,11 @@ class Enrichment(BaseModel):
     credit_budget_per_run: int = 50
 
 
+class Scoring(BaseModel):
+    weights: dict[str, float] = Field(default_factory=dict)
+    tiers: dict[str, float] = Field(default_factory=lambda: {"A": 60.0, "B": 35.0})
+
+
 class HostOpConfig(BaseModel):
     company: Company
     icp: ICP
@@ -86,6 +91,7 @@ class HostOpConfig(BaseModel):
     compliance: Compliance = Compliance()
     fetch: Fetch = Fetch()
     enrichment: Enrichment = Enrichment()
+    scoring: Scoring = Scoring()
 
 
 def load_config(path: str | Path | None = None) -> HostOpConfig:
