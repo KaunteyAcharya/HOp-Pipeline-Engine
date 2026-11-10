@@ -1,0 +1,112 @@
+# HostOp Pipeline Engine configuration.
+# Facts about HostOp below come ONLY from HostOp's public job post. Do not add claims that are not there.
+
+company:
+  name: HostOp
+  facts:  # allowlist: drafts may only state these about HostOp
+    - "AI operating system for short-term rental operators with 10 to 500 listings"
+    - "guest check-in"
+    - "ID verification"
+    - "damage waivers"
+    - "upsells"
+    - "payments and financials"
+    - "AI guest messaging is next on the roadmap"
+    - "founder-led and bootstrapped"
+    - "live with paying operators"
+    - "the founder scaled his own rental arbitrage business to 400+ units"
+
+icp:
+  min_listings: 10
+  max_listings: 500
+  ideal_min: 15
+  ideal_max: 150
+  multi_market_min_cities: 2
+
+geographies:  # Inside Airbnb city slugs / permit datasets you plan to load
+  - { country: US, region: TN, city: Nashville }
+  - { country: US, region: TX, city: Austin }
+  - { country: US, region: CO, city: Denver }
+  - { country: US, region: FL, city: Broward County }
+  - { country: CA, region: "ON", city: Toronto }
+  - { country: GB, region: ENG, city: London }
+
+pms_tech:  # name -> HTML fingerprints (lowercase substrings)
+  Guesty: ["guesty.com", "guestyforhosts", "guesty-booking"]
+  Hostaway: ["hostaway.com", "hostaway"]
+  Hospitable: ["hospitable.com", "smartbnb"]
+  OwnerRez: ["ownerrez.com", "ownerreservations"]
+  Lodgify: ["lodgify.com", "lodgify"]
+  Uplisting: ["uplisting.io", "uplisting"]
+  Track: ["trackhs.com", "track hospitality"]
+  Streamline: ["streamlinevrs.com", "streamline vrs"]
+  Escapia: ["escapia.com", "homeaway.escapia"]
+
+value_props:
+  - id: checkin
+    text: "guest check-in and ID verification in one flow"
+  - id: waivers
+    text: "damage waivers instead of chasing deposits"
+  - id: upsells
+    text: "upsells like early check-in offered to guests automatically"
+  - id: financials
+    text: "payments and financials alongside guest operations"
+
+banned_phrases:
+  - "I hope this email finds you well"
+  - "quick question"
+  - "game-changer"
+  - "game changer"
+  - "revolutionize"
+  - "synergy"
+  - "touch base"
+  - "circle back"
+  - "just following up"
+  - "I came across your profile"
+  - "guaranteed"
+  - "10x"
+  - "cutting-edge"
+  - "best-in-class"
+
+fake_familiarity_patterns:
+  - "loved your (recent )?post"
+  - "as we discussed"
+  - "great chatting"
+  - "following up on our (call|conversation)"
+  - "we met at"
+  - "long time no"
+
+sender:
+  name: "<YOUR NAME>"
+  title: "<YOUR TITLE>"
+  company: HostOp
+  postal_address: "<PHYSICAL MAILING ADDRESS REQUIRED FOR CAN-SPAM>"
+  opt_out_line: "If this isn't relevant, reply 'no' and I won't reach out again."
+
+limits:
+  linkedin_note_chars: 300
+  email_words: 90
+  instagram_dm_chars: 500
+
+outreach:
+  daily_caps:
+    linkedin_connect: 20
+    linkedin_message: 30
+    instagram_dm: 15
+    email_per_domain: 40
+
+compliance:
+  regions:
+    US: CAN-SPAM
+    CA: CASL
+    GB: UK-GDPR/PECR
+    EU: GDPR
+  eu_countries: [AT, BE, BG, HR, CY, CZ, DK, EE, FI, FR, DE, GR, HU, IE, IT, LV, LT, LU, MT, NL, PL, PT, RO, SK, SI, ES, SE]
+
+fetch:
+  min_delay_seconds: 2.0
+  cache_ttl_hours: 168
+  timeout_seconds: 15
+  blocked_domains: [airbnb.com, airbnb.co.uk, vrbo.com, homeaway.com, linkedin.com, instagram.com, facebook.com]
+
+enrichment:
+  credit_budget_per_run: 50
