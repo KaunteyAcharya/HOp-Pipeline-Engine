@@ -6,13 +6,22 @@ import typer
 from rich.console import Console
 
 from hostop.config import load_config
-from hostop.db import init_db
+from hostop.db import init_db, session_scope
+from hostop.settings import get_settings
 
 app = typer.Typer(help="HostOp Pipeline Engine (drafts for human review; never sends).", no_args_is_help=True)
 console = Console()
 
 DEMO_BANNER = "[bold yellow]DEMO MODE: all operators, contacts and results are SYNTHETIC.[/]"
 DemoOpt = typer.Option(False, "--demo", help="Use mock adapters and SYNTHETIC data.")
+
+
+DEMO_DB_URL = "sqlite:///hostop_demo.db"
+
+
+def db_url(demo: bool) -> str:
+    """Demo data lives in its own database so SYNTHETIC rows never mix with real ones."""
+    return DEMO_DB_URL if demo else get_settings().hostop_db_url
 
 
 def _banner(demo: bool) -> None:
@@ -37,7 +46,27 @@ def _todo(name: str, demo: bool) -> None:
 @app.command()
 def discover(demo: bool = DemoOpt) -> None:
     """Collect operators from open datasets, permits, web search and lists."""
-    _todo("discover", demo)
+    from rich.table import Table
+
+    from hostop.discovery.inside_airbnb import ATTRIBUTION
+    from hostop.discovery.pipeline import run_discovery
+
+    _banner(demo)
+    cfg = load_config()
+    url = db_url(demo)
+    init_db(url)
+    with session_scope(url) as s:
+        stats = run_discovery(s, cfg, demo)
+    table = Table(title="Discovery by source" + (" (SYNTHETIC)" if demo else ""))
+    for col in ("source", "records in ICP band", "new operators", "merged into existing", "already loaded"):
+        table.add_column(col)
+    for src, d in stats["by_source"].items():
+        table.add_row(src, str(d["seen"]), str(d["created"]), str(d["merged"]), str(d["skipped_existing"]))
+    console.print(table)
+    total = stats["operators_total"]
+    console.print(f"Resolved operators: [bold]{total}[/] / 1,000 target ({min(100, total / 10):.0f}%). "
+                  f"Dedupe rate this run: {stats['dedupe_rate']:.1%}. Growth signals: {stats['growth_signals']}.")
+    console.print(f"[dim]{ATTRIBUTION}[/]")
 
 
 @app.command()
