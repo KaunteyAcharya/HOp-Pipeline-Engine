@@ -223,7 +223,12 @@ def report(demo: bool = DemoOpt) -> None:
 @app.command()
 def dashboard(demo: bool = DemoOpt) -> None:
     """Launch the Streamlit dashboard."""
-    _todo("dashboard", demo)
+    import subprocess
+    import sys
+
+    _banner(demo)
+    cmd = [sys.executable, "-m", "streamlit", "run", "dashboard/app.py"]
+    subprocess.run([*cmd, "--", "--demo"] if demo else cmd, check=False)
 
 
 @app.command("run-all")

@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dashboard-demo",
+      "runtimeExecutable": ".venv/Scripts/streamlit.exe",
+      "runtimeArgs": ["run", "dashboard/app.py", "--server.headless", "true", "--server.port", "8501", "--server.address", "127.0.0.1", "--browser.gatherUsageStats", "false", "--", "--demo"],
+      "port": 8501,
+      "url": "http://127.0.0.1:8501"
+    }
+  ]
+}
