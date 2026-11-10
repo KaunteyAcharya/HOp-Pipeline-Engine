@@ -18,28 +18,40 @@ from hostop.models import Operator, Run, utcnow
 from hostop.resolve.entity_resolution import resolve
 
 
-def build_collectors(cfg: HostOpConfig, demo: bool) -> list[Collector]:
+def build_collectors(cfg: HostOpConfig, demo: bool, web: bool = False) -> list[Collector]:
+    from hostop.discovery.web_search import ListImportCollector, WebSearchCollector
+
     lo, hi = cfg.icp.min_listings, cfg.icp.max_listings
     if demo:
         from hostop.demo.seed import DEMO_DIR, generate
+        from hostop.discovery.providers.mock import MockSearch
 
         root = generate(DEMO_DIR)
         return [
             InsideAirbnbCollector(root / "inside_airbnb", lo, hi, synthetic=True),
             PermitCollector(load_mapping(root / "permit_mapping.yaml"), lo, hi, base_dir=root, synthetic=True),
+            WebSearchCollector(MockSearch(), cfg.geographies, cfg.fetch.blocked_domains, synthetic=True),
         ]
     collectors: list[Collector] = [InsideAirbnbCollector(Path("data/inside_airbnb"), lo, hi)]
     for mapping in sorted(Path("config/permit_mappings").glob("*.yaml")):
         collectors.append(PermitCollector(load_mapping(mapping), lo, hi))
+    for lst in sorted(Path("data/lists").glob("*.csv")):
+        collectors.append(ListImportCollector(lst))
+    if web:
+        from hostop.discovery.providers.firecrawl import FirecrawlSearch
+        from hostop.settings import get_settings
+
+        provider = FirecrawlSearch(get_settings().firecrawl_api_key, cfg.fetch.blocked_domains)
+        collectors.append(WebSearchCollector(provider, cfg.geographies, cfg.fetch.blocked_domains))
     return collectors
 
 
-def run_discovery(session: Session, cfg: HostOpConfig, demo: bool,
+def run_discovery(session: Session, cfg: HostOpConfig, demo: bool, web: bool = False,
                   collectors: Iterable[Collector] | None = None) -> dict[str, Any]:
     run = Run(command="discover", demo=demo)
     session.add(run)
     totals: dict[str, Any] = {"by_source": {}}
-    for c in collectors if collectors is not None else build_collectors(cfg, demo):
+    for c in collectors if collectors is not None else build_collectors(cfg, demo, web):
         stats = resolve(session, c.collect())
         for src, d in stats.by_source.items():
             agg = totals["by_source"].setdefault(src, {"seen": 0, "created": 0, "merged": 0, "skipped_existing": 0})

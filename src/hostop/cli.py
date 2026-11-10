@@ -44,7 +44,10 @@ def _todo(name: str, demo: bool) -> None:
 
 
 @app.command()
-def discover(demo: bool = DemoOpt) -> None:
+def discover(
+    demo: bool = DemoOpt,
+    web: bool = typer.Option(False, "--web", help="Also run paid web search (Firecrawl credits)."),
+) -> None:
     """Collect operators from open datasets, permits, web search and lists."""
     from rich.table import Table
 
@@ -56,7 +59,7 @@ def discover(demo: bool = DemoOpt) -> None:
     url = db_url(demo)
     init_db(url)
     with session_scope(url) as s:
-        stats = run_discovery(s, cfg, demo)
+        stats = run_discovery(s, cfg, demo, web=web)
     table = Table(title="Discovery by source" + (" (SYNTHETIC)" if demo else ""))
     for col in ("source", "records in ICP band", "new operators", "merged into existing", "already loaded"):
         table.add_column(col)
@@ -70,9 +73,45 @@ def discover(demo: bool = DemoOpt) -> None:
 
 
 @app.command()
-def analyze(demo: bool = DemoOpt) -> None:
-    """Analyze operator websites (robots.txt aware)."""
-    _todo("analyze", demo)
+def analyze(
+    demo: bool = DemoOpt,
+    limit: int = typer.Option(200, help="Max sites per run."),
+    refresh: bool = typer.Option(False, help="Re-analyze sites already analyzed."),
+) -> None:
+    """Analyze operator websites (robots.txt aware, rate-limited, cached)."""
+    from sqlalchemy import select
+
+    from hostop.analyze.site_analyzer import crawl_site, store_findings
+    from hostop.models import Operator
+    from hostop.net.fetcher import Fetcher, PoliteFetcher
+
+    _banner(demo)
+    cfg = load_config()
+    url = db_url(demo)
+    init_db(url)
+    fetcher: Fetcher
+    if demo:
+        from hostop.demo.mock_web import MockFetcher
+
+        fetcher = MockFetcher(cfg.fetch.blocked_domains)
+    else:
+        fetcher = PoliteFetcher(get_settings().hostop_user_agent, cfg.fetch.blocked_domains,
+                                cfg.fetch.min_delay_seconds, cache_ttl_hours=cfg.fetch.cache_ttl_hours,
+                                timeout=cfg.fetch.timeout_seconds)
+    done = skipped = 0
+    with session_scope(url) as s:
+        q = select(Operator).where(Operator.domain.is_not(None))
+        if not refresh:
+            q = q.where(Operator.analyzed_at.is_(None))
+        for op in s.scalars(q.limit(limit)).all():
+            f = crawl_site(op.domain or "", fetcher, cfg.pms_tech)
+            if f.skipped and not f.pages and not f.pms:
+                skipped += 1
+                console.print(f"[dim]skip {op.domain}: {f.skipped[0]}[/]")
+                continue
+            store_findings(s, op, f, synthetic=op.is_synthetic)
+            done += 1
+    console.print(f"Analyzed {done} operator sites, skipped {skipped}.")
 
 
 @app.command()
