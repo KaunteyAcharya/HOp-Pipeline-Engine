@@ -148,9 +148,58 @@ def score(
 
 
 @app.command()
-def enrich(demo: bool = DemoOpt) -> None:
-    """Find verified contacts within a credit budget."""
-    _todo("enrich", demo)
+def enrich(
+    demo: bool = DemoOpt,
+    limit: int = typer.Option(50, help="Max operators (Tier A/B, highest score first)."),
+) -> None:
+    """Find verified contacts within a credit budget (never guesses emails)."""
+    from hostop.enrich.base import EnrichmentProvider
+    from hostop.enrich.waterfall import enrich_operators
+
+    _banner(demo)
+    cfg = load_config()
+    st = get_settings()
+    providers: list[EnrichmentProvider] = []
+    if demo:
+        from hostop.enrich.mock import MockProvider
+
+        providers.append(MockProvider())
+    else:
+        if st.apollo_api_key:
+            from hostop.enrich.apollo import ApolloProvider
+
+            providers.append(ApolloProvider(st.apollo_api_key))
+        if st.hunter_api_key:
+            from hostop.enrich.hunter import HunterProvider
+
+            providers.append(HunterProvider(st.hunter_api_key))
+        if not providers:
+            console.print("[yellow]No APOLLO_API_KEY or HUNTER_API_KEY set: only LinkedIn search URLs will be "
+                          "generated.[/]")
+    url = db_url(demo)
+    init_db(url)
+    with session_scope(url) as s:
+        res = enrich_operators(s, cfg, providers, limit=limit)
+    console.print(f"Operators processed: {res.operators}; with verified email: {res.with_verified_email}; "
+                  f"unverified emails dropped: {res.dropped_unverified}; suppressed: {res.suppressed}.")
+    console.print(f"Credits used: {res.credits or 0} (budget {cfg.enrichment.credit_budget_per_run})"
+                  + ("; stopped at budget." if res.budget_stopped else ""))
+
+
+@app.command()
+def suppress(
+    value: str = typer.Argument(..., help="Email, domain or @handle to add to do-not-contact."),
+    reason: str = typer.Option("do_not_contact", help="opt_out | do_not_contact | bounced | customer"),
+    demo: bool = DemoOpt,
+) -> None:
+    """Add an email, domain or handle to the suppression list."""
+    from hostop.compliance.optout import suppress as add
+
+    url = db_url(demo)
+    init_db(url)
+    with session_scope(url) as s:
+        added = add(s, value, reason)
+    console.print("Added." if added else "Already suppressed.")
 
 
 @app.command()
