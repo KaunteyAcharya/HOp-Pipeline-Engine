@@ -383,8 +383,33 @@ def serve(demo: bool = DemoOpt, port: int = typer.Option(8000)) -> None:
 
 @app.command()
 def report(demo: bool = DemoOpt) -> None:
-    """Write reports/weekly_report.md."""
-    _todo("report", demo)
+    """Write reports/weekly_report.md (sample sizes shown, small samples flagged, nothing extrapolated)."""
+    from pathlib import Path
+
+    from hostop.analytics.funnel import weekly_report
+
+    _banner(demo)
+    url = db_url(demo)
+    init_db(url)
+    with session_scope(url) as s:
+        text = weekly_report(s, synthetic=demo)
+    out = Path("reports") / ("SYNTHETIC_weekly_report.md" if demo else "weekly_report.md")
+    out.parent.mkdir(exist_ok=True)
+    out.write_text(text, encoding="utf-8")
+    console.print(f"Wrote {out}")
+
+
+@app.command("demo-events")
+def demo_events(demo: bool = DemoOpt) -> None:
+    """Generate SYNTHETIC sent/reply/demo events so the demo dashboard and report have data (--demo only)."""
+    from hostop.demo.events import seed_events
+
+    if not demo:
+        console.print("[red]demo-events only runs with --demo; real events are logged with `hostop log`.[/]")
+        raise typer.Exit(1)
+    _banner(demo)
+    with session_scope(db_url(demo)) as s:
+        console.print(f"Added {seed_events(s)} SYNTHETIC events (0 means events already exist).")
 
 
 @app.command()
