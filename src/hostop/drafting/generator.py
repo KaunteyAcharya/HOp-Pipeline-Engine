@@ -67,12 +67,15 @@ def _validate_all(out: dict[str, object], brief: dict[str, object], cfg: HostOpC
 
 
 def draft_operators(s: Session, cfg: HostOpConfig, llm: LLM, limit: int = 20,
-                    tiers: tuple[str, ...] = ("A", "B"), max_attempts: int = 2) -> DraftStats:
+                    tiers: tuple[str, ...] = ("A", "B"), max_attempts: int = 2,
+                    only_ids: list[int] | None = None) -> DraftStats:
     st = DraftStats()
     q = (select(Operator).join(Score, Score.operator_id == Operator.id)
          .where(Score.tier.in_(tiers), Operator.contacts.any(), ~Operator.id.in_(select(Draft.operator_id)))
          .options(selectinload(Operator.evidence), selectinload(Operator.signals), selectinload(Operator.contacts))
          .order_by(Score.total.desc()).limit(limit))
+    if only_ids is not None:
+        q = q.where(Operator.id.in_(only_ids))
     rotation: dict[str, int] = {}
     for op in s.scalars(q).all():
         contact: Contact | None = next((c for c in op.contacts if c.email), None) or (op.contacts[0]

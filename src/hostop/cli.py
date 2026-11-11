@@ -232,9 +232,153 @@ def draft(
 
 
 @app.command()
-def export(demo: bool = DemoOpt) -> None:
-    """Export approved sequences and task queues."""
-    _todo("export", demo)
+def export(
+    demo: bool = DemoOpt,
+    platform: str = typer.Option("instantly", help="instantly | smartlead"),
+    list_name: str = typer.Option("tier_ab", help="List name written to each row (for analytics)."),
+    include_review: bool = typer.Option(False, help="Include CASL/GDPR/unknown-country contacts."),
+    verify: bool = typer.Option(False, help="Re-verify each email before export (Hunter credits)."),
+    out: str = typer.Option("exports", help="Output folder."),
+) -> None:
+    """Export APPROVED email sequences + build/export LinkedIn and Instagram task queues. Never sends."""
+    from pathlib import Path
+
+    from hostop.deliverability.verify import HunterVerifier, MockVerifier, Verifier
+    from hostop.outreach.export import export_email_sequences
+    from hostop.outreach.queues import build_queue, export_queue
+
+    _banner(demo)
+    cfg = load_config()
+    verifier: Verifier | None = None
+    if verify:
+        verifier = MockVerifier() if demo else HunterVerifier(get_settings().hunter_api_key)
+    url = db_url(demo)
+    init_db(url)
+    with session_scope(url) as s:
+        res = export_email_sequences(s, cfg, platform, Path(out), list_name, include_review, verifier)
+        queued = build_queue(s, cfg)
+        tasks = export_queue(s, Path(out))
+    console.print(f"Email CSV: {res.path} ({res.rows} contacts; skipped: {res.skipped_suppressed} suppressed, "
+                  f"{res.skipped_review} need compliance review, {res.skipped_incomplete} incomplete, "
+                  f"{res.skipped_failed_verification} failed verification)")
+    console.print(f"Task queue: {queued} new tasks scheduled within daily caps -> {tasks}")
+
+
+@app.command()
+def review(
+    demo: bool = DemoOpt,
+    approve_ids: list[int] = typer.Option([], "--approve", help="Draft id(s) to approve."),
+    reject_ids: list[int] = typer.Option([], "--reject", help="Draft id(s) to reject."),
+    approve_all_valid: bool = typer.Option(False, help="Approve every pending draft with no validation errors."),
+) -> None:
+    """Approve or reject drafts (the dashboard does the same with editing)."""
+    from sqlalchemy import select
+
+    from hostop.models import Draft
+    from hostop.outreach.review import approve, reject
+
+    _banner(demo)
+    url = db_url(demo)
+    init_db(url)
+    with session_scope(url) as s:
+        ids = list(approve_ids)
+        if approve_all_valid:
+            ids += [d.id for d in s.scalars(select(Draft).where(Draft.status == "pending")) if not d.validation_errors]
+        for i in ids:
+            approve(s, i)
+        for i in reject_ids:
+            reject(s, i)
+    console.print(f"Approved {len(ids)}, rejected {len(reject_ids)}.")
+
+
+@app.command("log")
+def log_cmd(
+    draft_id: int = typer.Argument(..., help="Draft id the event relates to."),
+    event: str = typer.Argument(..., help="sent | replied | positive | demo_booked | demo_held | opt_out | bounced"),
+    list_name: str = typer.Option(None, help="List name for analytics."),
+    note: str = typer.Option(None),
+    demo: bool = DemoOpt,
+) -> None:
+    """Log what happened after a human sent a message."""
+    from hostop.outreach.status import log_from_draft
+
+    url = db_url(demo)
+    init_db(url)
+    with session_scope(url) as s:
+        ev = log_from_draft(s, draft_id, event, list_name, note)
+    console.print(f"Logged {ev.event} on {ev.channel} for operator {ev.operator_id}.")
+
+
+@app.command("dns-check")
+def dns_check_cmd(
+    domains: list[str] = typer.Argument(..., help="Sending domains to check."),
+    selector: list[str] = typer.Option([], help="DKIM selector(s) from your email provider."),
+) -> None:
+    """Check SPF, DKIM, DMARC and MX for sending domains."""
+    from hostop.deliverability.dns_check import check_domain
+
+    for d in domains:
+        r = check_domain(d, selectors=selector or None)
+        status = "[green]OK[/]" if r.ok else "[red]ISSUES[/]"
+        console.print(f"{status} {r.domain}  SPF={'yes' if r.spf else 'no'}  DMARC={r.dmarc_policy or 'none'}  "
+                      f"DKIM={','.join(r.dkim_selectors) or 'none'}  MX={len(r.mx)}")
+        for issue in r.issues:
+            console.print(f"   - {issue}")
+
+
+@app.command()
+def warmup(
+    domains: int = typer.Option(3, help="Number of sending domains."),
+    inboxes: int = typer.Option(2, help="Inboxes per domain (max 3)."),
+    weeks: int = typer.Option(6),
+) -> None:
+    """Print a conservative warm-up and ramp schedule."""
+    from datetime import date
+
+    from hostop.deliverability.warmup import plan, to_markdown
+
+    console.print(to_markdown(plan(domains, inboxes, date.today(), weeks=weeks)))
+
+
+@app.command()
+def crm(
+    demo: bool = DemoOpt,
+    attio: bool = typer.Option(False, "--attio", help="Push to Attio (real data only). Default writes CSV."),
+    list_slug: str = typer.Option("hostop_pipeline", help="Attio list slug holding pipeline stage."),
+    stage_attribute: str = typer.Option("stage", help="Attio status attribute slug on that list."),
+    out: str = typer.Option("exports/crm_companies.csv"),
+) -> None:
+    """Sync Tier A/B companies, contacts, stage and score notes to a CRM CSV or Attio."""
+    from pathlib import Path
+
+    from hostop.crm.attio import AttioClient, AttioConfig
+    from hostop.crm.sync import build_rows, push_to_attio, write_csv
+
+    _banner(demo)
+    url = db_url(demo)
+    init_db(url)
+    with session_scope(url) as s:
+        rows = build_rows(s)
+    if attio:
+        if demo:
+            console.print("[red]Refusing to push SYNTHETIC demo data to Attio.[/]")
+            raise typer.Exit(1)
+        client = AttioClient(AttioConfig(get_settings().attio_api_key, list_slug, stage_attribute))
+        console.print(f"Pushed {push_to_attio(rows, client)} companies to Attio.")
+    else:
+        console.print(f"Wrote {len(rows)} rows to {write_csv(rows, Path(out))}")
+
+
+@app.command()
+def serve(demo: bool = DemoOpt, port: int = typer.Option(8000)) -> None:
+    """Run the FastAPI hooks for n8n."""
+    import os
+
+    import uvicorn
+
+    if demo:
+        os.environ["HOSTOP_DEMO"] = "1"
+    uvicorn.run("hostop.api.app:app", host="127.0.0.1", port=port)
 
 
 @app.command()
