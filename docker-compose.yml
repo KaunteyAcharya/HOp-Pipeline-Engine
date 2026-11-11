@@ -1,0 +1,30 @@
+# Secrets come from .env (never commit it). Data, reports and exports are bind-mounted so they persist.
+# Demo:  HOSTOP_DEMO=1 docker compose up    (SYNTHETIC data only)
+# CLI:   docker compose run --rm cli run-all --demo
+x-app: &app
+  build: .
+  env_file: .env
+  environment:
+    HOSTOP_DB_URL: sqlite:////app/state/hostop.db
+    HOSTOP_DEMO: ${HOSTOP_DEMO:-0}
+  volumes:
+    - ./state:/app/state
+    - ./data:/app/data
+    - ./reports:/app/reports
+    - ./exports:/app/exports
+
+services:
+  api:
+    <<: *app
+    ports: ["127.0.0.1:8000:8000"]
+
+  dashboard:
+    <<: *app
+    command: ["streamlit", "run", "dashboard/app.py", "--server.address", "0.0.0.0",
+              "--browser.gatherUsageStats", "false"]
+    ports: ["127.0.0.1:8501:8501"]
+
+  cli:
+    <<: *app
+    entrypoint: ["hostop"]
+    profiles: ["cli"]

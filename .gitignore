@@ -19,3 +19,4 @@ reports/*
 !reports/.gitkeep
 exports/
 .demo_data/
+state/

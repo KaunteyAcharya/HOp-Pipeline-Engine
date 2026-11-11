@@ -1,0 +1,9 @@
+.venv
+.git
+*.db
+.cache
+.demo_data
+exports
+reports
+state
+.env

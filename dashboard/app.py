@@ -5,6 +5,7 @@ Run: streamlit run dashboard/app.py -- --demo
 
 from __future__ import annotations
 
+import os
 import sys
 from dataclasses import asdict
 from datetime import date
@@ -25,7 +26,7 @@ from hostop.outreach.status import EVENTS, log_from_draft
 from hostop.scoring.icp import explain
 from hostop.settings import get_settings
 
-DEMO = "--demo" in sys.argv
+DEMO = "--demo" in sys.argv or os.environ.get("HOSTOP_DEMO") == "1"
 URL = "sqlite:///hostop_demo.db" if DEMO else get_settings().hostop_db_url
 init_db(URL)
 CFG = load_config(Path("config/hostop.yaml"))

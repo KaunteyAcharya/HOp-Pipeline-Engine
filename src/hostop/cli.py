@@ -38,11 +38,6 @@ def init_db_cmd() -> None:
                   f"(ideal {cfg.icp.ideal_min}-{cfg.icp.ideal_max}).")
 
 
-def _todo(name: str, demo: bool) -> None:
-    _banner(demo)
-    console.print(f"[dim]`{name}` is implemented in a later phase.[/]")
-
-
 @app.command()
 def discover(
     demo: bool = DemoOpt,
@@ -423,10 +418,45 @@ def dashboard(demo: bool = DemoOpt) -> None:
     subprocess.run([*cmd, "--", "--demo"] if demo else cmd, check=False)
 
 
+@app.command()
+def insights(
+    demo: bool = DemoOpt,
+    folder: str = typer.Option("data/transcripts", help="Folder of .txt transcripts (Speaker: text per line)."),
+) -> None:
+    """Extract objections, pains and verbatim phrases from call transcripts into reports/call_insights.md."""
+    from pathlib import Path
+
+    from hostop.insights.calls import analyze_dir, to_markdown
+
+    _banner(demo)
+    src = Path(folder)
+    if demo:
+        from hostop.demo.transcripts import write_transcripts
+
+        src = write_transcripts(Path(".demo_data/transcripts"))
+    url = db_url(demo)
+    init_db(url)
+    with session_scope(url) as s:
+        n, tags = analyze_dir(s, src, synthetic=demo)
+    out = Path("reports") / ("SYNTHETIC_call_insights.md" if demo else "call_insights.md")
+    out.parent.mkdir(exist_ok=True)
+    out.write_text(to_markdown(n, tags, demo), encoding="utf-8")
+    console.print(f"{n} transcripts, {len(tags)} tagged lines -> {out}")
+
+
 @app.command("run-all")
-def run_all(demo: bool = DemoOpt) -> None:
-    """discover -> analyze -> score -> enrich -> draft -> export -> report."""
-    _todo("run-all", demo)
+def run_all(
+    demo: bool = DemoOpt,
+    web: bool = typer.Option(False, "--web", help="Include paid web search."),
+) -> None:
+    """discover -> analyze -> score -> enrich -> draft -> report. Stops at drafts: review and export stay manual."""
+    discover(demo=demo, web=web)
+    analyze(demo=demo, limit=200, refresh=False)
+    score(demo=demo, explain_id=None)  # type: ignore[arg-type]
+    enrich(demo=demo, limit=50)
+    draft(demo=demo, limit=20)
+    report(demo=demo)
+    console.print("[bold]Next (human):[/] review drafts in `hostop dashboard`, then `hostop export`.")
 
 
 if __name__ == "__main__":
