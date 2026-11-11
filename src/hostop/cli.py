@@ -203,9 +203,32 @@ def suppress(
 
 
 @app.command()
-def draft(demo: bool = DemoOpt) -> None:
-    """Draft messages for human review."""
-    _todo("draft", demo)
+def draft(
+    demo: bool = DemoOpt,
+    limit: int = typer.Option(20, help="Max operators to draft for (Tier A/B with contacts)."),
+) -> None:
+    """Draft messages for human review (validated; never sent)."""
+    from hostop.drafting.generator import draft_operators
+    from hostop.drafting.llm import LLM, AnthropicLLM
+
+    _banner(demo)
+    cfg = load_config()
+    llm: LLM
+    if demo:
+        from hostop.drafting.mock_llm import MockLLM
+
+        llm = MockLLM()
+    else:
+        st = get_settings()
+        llm = AnthropicLLM(st.anthropic_model, st.anthropic_api_key or None)
+    url = db_url(demo)
+    init_db(url)
+    with session_scope(url) as s:
+        res = draft_operators(s, cfg, llm, limit=limit)
+    console.print(f"Operators: {res.operators}; drafts: {res.drafts} (valid {res.valid}, needs fix {res.invalid}); "
+                  f"refused: {res.refused}; suppressed: {res.skipped_suppressed}.")
+    for hid, n in sorted(res.by_hook.items()):
+        console.print(f"  hook {hid}: {n} drafts")
 
 
 @app.command()

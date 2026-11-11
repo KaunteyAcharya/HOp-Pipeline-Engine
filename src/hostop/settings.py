@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     hostop_config: str = "config/hostop.yaml"
     hostop_user_agent: str = "HostOpPipelineBot/0.1 (+contact via company website)"
     anthropic_api_key: str = ""
-    anthropic_model: str = "claude-sonnet-5-5"
+    anthropic_model: str = "claude-opus-5-5"
     firecrawl_api_key: str = ""
     apollo_api_key: str = ""
     hunter_api_key: str = ""
