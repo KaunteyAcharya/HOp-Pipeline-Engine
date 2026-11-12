@@ -7,6 +7,13 @@
       "runtimeArgs": ["run", "dashboard/app.py", "--server.headless", "true", "--server.port", "8501", "--server.address", "127.0.0.1", "--browser.gatherUsageStats", "false", "--", "--demo"],
       "port": 8501,
       "url": "http://127.0.0.1:8501"
+    },
+    {
+      "name": "api-demo",
+      "runtimeExecutable": ".venv/Scripts/hostop.exe",
+      "runtimeArgs": ["serve", "--demo", "--port", "8000"],
+      "port": 8000,
+      "url": "http://127.0.0.1:8000"
     }
   ]
 }
