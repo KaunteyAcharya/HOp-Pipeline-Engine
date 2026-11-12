@@ -21,3 +21,4 @@ exports/
 .demo_data/
 state/
 testing/
+private/
