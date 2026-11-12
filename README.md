@@ -99,9 +99,6 @@ plus a demo smoke test.
 
 - [FINDING_1000_OPERATORS.md](FINDING_1000_OPERATORS.md): how the first 1,000 operators get found
 - [PLAYBOOK.md](PLAYBOOK.md): sequences, hooks, objections and cadence
-- [90_DAY_PLAN.md](90_DAY_PLAN.md)
-- [LOOM_SCRIPT.md](LOOM_SCRIPT.md): a 5-minute walkthrough
-- [APPLICATION_NOTES.md](APPLICATION_NOTES.md): design decisions, what is unverified and next steps
 - [docs/DELIVERABILITY_CHECKLIST.md](docs/DELIVERABILITY_CHECKLIST.md) and [docs/N8N_FLOWS.md](docs/N8N_FLOWS.md)
 
 Inside Airbnb data is © Inside Airbnb, licensed CC BY 4.0, and attributed in every import.
